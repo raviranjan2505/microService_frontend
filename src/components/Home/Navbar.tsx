@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Heart, ShoppingCart, User } from "lucide-react"
+import { Bell, Heart, ShoppingCart, User } from "lucide-react"
 import useCart from "@/app/store/useCart"
 import CartSidebar from "@/app/(root)/cart/CartSidebar"
 import WishlistSidebar from "@/app/(root)/wishlist/WishlistSidebar"
@@ -17,6 +17,7 @@ import HeaderLocation from "./HeaderLocation"
 import { useLoginStore } from "@/app/store/useLoginStore"
 import { useSignupStore } from "@/app/store/useSignupStore"
 import { useWishlistStore } from "@/app/store/useWishlistStore"
+import { getMyUnreadNotificationCount } from "@/lib/actions/notifications"
 
 export default function Navbar() {
   const [cartOpen, setCartOpen] = useState(false)
@@ -28,20 +29,16 @@ export default function Navbar() {
   const totalQty = cartItems.reduce((sum, i) => sum + i.quantity, 0)
   const totalPrice = cartItems.reduce((sum, i) => sum + i.quantity * i.item.price, 0)
 
-  // ✅ Persisted user/token
-  const loginToken = useLoginStore((s) => s.token)
-  const signupToken = useSignupStore((s) => s.token)
-  const token = loginToken || signupToken
-
   const loginUser = useLoginStore((s) => s.user)
   const signupUser = useSignupStore((s) => s.user)
   const user = loginUser || signupUser
+  const isAuthenticated = !!user
 
   const wishlistCount = useWishlistStore((s) => s.entries.length)
   const fetchWishlistEntries = useWishlistStore((s) => s.fetchEntries)
   const clearWishlist = useWishlistStore((s) => s.clear)
+  const [notificationCount, setNotificationCount] = useState(0)
 
-  // Close dialogs automatically when logged in
   useEffect(() => {
     if (user) {
       setLoginOpen(false)
@@ -50,17 +47,42 @@ export default function Navbar() {
   }, [user])
 
   useEffect(() => {
-    if (token) {
+    if (isAuthenticated) {
       fetchWishlistEntries()
     } else {
       clearWishlist()
+      setNotificationCount(0)
     }
-  }, [token, fetchWishlistEntries, clearWishlist])
+  }, [isAuthenticated, fetchWishlistEntries, clearWishlist])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    let cancelled = false
+
+    const loadNotificationCount = async () => {
+      const count = await getMyUnreadNotificationCount()
+      if (!cancelled) {
+        setNotificationCount(count)
+      }
+    }
+
+    void loadNotificationCount()
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadNotificationCount()
+      }
+    }, 20000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [isAuthenticated])
 
   return (
     <header className="border-b shadow-sm sticky top-0 bg-white z-50">
       <div className="flex items-center justify-between px-4 py-3 md:px-6">
-        {/* Logo + Location */}
         <div className="flex items-center gap-2">
           <Link href="/" className="text-2xl font-bold text-green-600 hidden md:block">
             NexusGrocery
@@ -68,17 +90,31 @@ export default function Navbar() {
           <HeaderLocation />
         </div>
 
-        {/* Desktop Actions */}
         <div className="hidden md:flex items-center gap-4">
           <AnimatedSearchInput />
 
-          {token ? (
+          {isAuthenticated ? (
             <AccountMenu />
           ) : (
             <>
               <Button variant="ghost" onClick={() => setLoginOpen(true)}>Login</Button>
               <Button variant="ghost" onClick={() => setSignUpOpen(true)}>SignUp</Button>
             </>
+          )}
+
+          {isAuthenticated && (
+            <Link
+              href="/account/notifications"
+              className="relative rounded-md border border-gray-200 p-2 hover:bg-gray-50"
+              aria-label="Open notifications"
+            >
+              <Bell className="h-5 w-5 text-gray-700" />
+              {notificationCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-green-600 text-white text-[10px] flex items-center justify-center">
+                  {notificationCount > 99 ? "99+" : notificationCount}
+                </span>
+              )}
+            </Link>
           )}
 
           <button
@@ -88,7 +124,7 @@ export default function Navbar() {
             aria-label="Open wishlist"
           >
             <Heart className="h-5 w-5 text-gray-700" />
-            {token && wishlistCount > 0 && (
+            {isAuthenticated && wishlistCount > 0 && (
               <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-red-600 text-white text-[10px] flex items-center justify-center">
                 {wishlistCount}
               </span>
@@ -105,13 +141,27 @@ export default function Navbar() {
             <ShoppingCart />
             <div>
               <div>{totalQty === 0 ? "My Cart" : `${totalQty} items`}</div>
-              <div>{totalQty !== 0 && `₹ ${totalPrice}`}</div>
+              <div>{totalQty !== 0 && `â‚¹ ${totalPrice}`}</div>
             </div>
           </button>
         </div>
 
-        {/* Mobile Account Button */}
         <div className="md:hidden flex items-center gap-2">
+          {isAuthenticated && (
+            <Link
+              href="/account/notifications"
+              className="relative rounded-md border border-gray-200 p-2 hover:bg-gray-50"
+              aria-label="Open notifications"
+            >
+              <Bell className="h-5 w-5 text-gray-700" />
+              {notificationCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-green-600 text-white text-[10px] flex items-center justify-center">
+                  {notificationCount > 99 ? "99+" : notificationCount}
+                </span>
+              )}
+            </Link>
+          )}
+
           <button
             type="button"
             className="relative rounded-md border border-gray-200 p-2 hover:bg-gray-50"
@@ -119,14 +169,14 @@ export default function Navbar() {
             aria-label="Open wishlist"
           >
             <Heart className="h-5 w-5 text-gray-700" />
-            {token && wishlistCount > 0 && (
+            {isAuthenticated && wishlistCount > 0 && (
               <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-red-600 text-white text-[10px] flex items-center justify-center">
                 {wishlistCount}
               </span>
             )}
           </button>
 
-          {token ? (
+          {isAuthenticated ? (
             <AccountMenuMobile />
           ) : (
             <Button variant="ghost" onClick={() => setLoginOpen(true)}>
@@ -136,18 +186,16 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Search */}
       <div className="px-4 pb-3 md:hidden">
         <AnimatedSearchInput />
       </div>
 
-      {/* Mobile Bottom Cart */}
       <div className="fixed bottom-0 left-0 right-0 bg-green-600 text-white px-4 py-3 flex items-center justify-between md:hidden z-50">
         <div>
           <p className="font-semibold">
             {totalQty === 0 ? "My Cart" : `${totalQty} item${totalQty > 1 ? "s" : ""}`}
           </p>
-          {totalQty !== 0 && <p className="text-sm">₹ {totalPrice}</p>}
+          {totalQty !== 0 && <p className="text-sm">â‚¹ {totalPrice}</p>}
         </div>
         <button
           onClick={() => setCartOpen(true)}
@@ -157,7 +205,6 @@ export default function Navbar() {
         </button>
       </div>
 
-      {/* Dialogs */}
       <CartSidebar open={cartOpen} onClose={() => setCartOpen(false)} />
       <WishlistSidebar open={wishlistOpen} onClose={() => setWishlistOpen(false)} />
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />

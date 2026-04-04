@@ -2,9 +2,8 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import axiosInstance from "@/lib/axios";
+import axiosInstance from "@/lib/axiosInstance";
 import { API_ROUTES } from "@/utils/api";
-import Cookies from "js-cookie";
 
 type User = {
   id: string;
@@ -15,7 +14,6 @@ type User = {
 
 type LoginStore = {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
@@ -28,15 +26,13 @@ type LoginStore = {
   setSuccessMessage: (msg: string | null) => void;
 
   login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  loadTokenFromCookie: () => void;
+  logout: () => Promise<void>;
 };
 
 export const useLoginStore = create<LoginStore>()(
   persist(
     (set) => ({
       user: null,
-      token: Cookies.get("authToken") ?? null,
       isLoading: false,
       error: null,
       successMessage: null,
@@ -59,24 +55,8 @@ export const useLoginStore = create<LoginStore>()(
             password,
           });
 
-          const token = res.data?.accessToken ?? null;
-          const refreshToken = res.data?.refreshToken ?? null;
           const userId = res.data?.userId ?? null;
           const role = res.data?.Role ?? null;
-
-          if (!token) {
-            set({ isLoading: false, error: "Login failed: No access token received" });
-            return false;
-          }
-
-          Cookies.set("authToken", token, { path: "/", sameSite: "Lax" });
-          if (refreshToken) {
-            Cookies.set("refreshToken", refreshToken, {
-              path: "/",
-              sameSite: "Lax",
-              expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            });
-          }
 
           set({
             user: userId
@@ -87,7 +67,6 @@ export const useLoginStore = create<LoginStore>()(
                   role,
                 }
               : null,
-            token,
             isLoading: false,
             successMessage: "Login successful!",
             email: "",
@@ -101,24 +80,23 @@ export const useLoginStore = create<LoginStore>()(
         }
       },
 
-      logout: () => {
-        Cookies.remove("authToken");
-        Cookies.remove("refreshToken");
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("address-storage")
-        set({
-          user: null,
-          token: null,
-          successMessage: null,
-          error: null,
-          email: "",
-          password: "",
-        });
-      },
-
-      loadTokenFromCookie: () => {
-        const token = Cookies.get("authToken") ?? null;
-        set({ token });
+      logout: async () => {
+        try {
+          await axiosInstance.post(`${API_ROUTES.AUTH}/logout`, {});
+        } catch (err) {
+          console.error("Logout failed", err);
+        } finally {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("address-storage");
+          }
+          set({
+            user: null,
+            successMessage: null,
+            error: null,
+            email: "",
+            password: "",
+          });
+        }
       },
     }),
     {
@@ -126,9 +104,6 @@ export const useLoginStore = create<LoginStore>()(
       version: 2,
       partialize: (state) => ({ user: state.user }),
       migrate: (persistedState: any) => ({ user: persistedState?.user ?? null }),
-      onRehydrateStorage: () => (state) => {
-        state?.loadTokenFromCookie?.();
-      },
     }
   )
 );

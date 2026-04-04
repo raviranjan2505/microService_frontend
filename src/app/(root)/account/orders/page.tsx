@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cancelMyOrder, getMyOrder, getOrderDetails } from "@/lib/actions/action";
+import PaginationControls from "@/components/common/PaginationControls";
+import { cancelMyOrder, getMyOrdersPage, getOrderDetails } from "@/lib/actions/action";
 import type { Order } from "@/lib/data";
 import Image from "next/image";
 import { getShipmentByOrderId, type Shipment } from "@/lib/actions/shipping";
 import { toast } from "sonner";
 import Skeleton from "@/components/Loaders/Skeleton";
+
+const DEFAULT_PAGE_SIZE = 10;
 
 function OrdersListSkeleton() {
   return (
@@ -65,30 +68,50 @@ export default function OrderPage() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const refreshOrders = async () => {
     setRefreshing(true);
     try {
-      const data = await getMyOrder();
-      setOrders(data || []);
+      const data = await getMyOrdersPage(page, pageSize);
+      if (!data) {
+        setOrders([]);
+        setTotalCount(0);
+        setTotalPages(1);
+        return;
+      }
+
+      if (data.total > 0 && data.items.length === 0 && page > data.totalPages) {
+        setPage(data.totalPages);
+        return;
+      }
+
+      setOrders(data.items || []);
+      setPage(data.page);
+      setPageSize(data.pageSize);
+      setTotalCount(data.total);
+      setTotalPages(data.totalPages);
     } catch {
       setOrders([]);
+      setTotalCount(0);
+      setTotalPages(1);
     } finally {
       setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    refreshOrders();
-  }, []);
+    void refreshOrders();
+  }, [page, pageSize]);
 
-  // Poll for order status updates while the page is visible.
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState !== "visible") return;
 
       if (selectedOrder?.id) {
-        // refresh current order details so status updates reflect immediately
         handleViewDetails(String(selectedOrder.id));
         return;
       }
@@ -97,7 +120,7 @@ export default function OrderPage() {
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [selectedOrder?.id]);
+  }, [selectedOrder?.id, page, pageSize]);
 
   const handleViewDetails = async (orderNumber: string) => {
     setDetailsLoading(true);
@@ -152,6 +175,7 @@ export default function OrderPage() {
       </div>
 
       {!selectedOrder && (
+        <>
         <div className="flex flex-col space-y-3">
           {orders.map((order) => (
             <div
@@ -159,16 +183,14 @@ export default function OrderPage() {
               className="flex items-center p-4 border border-gray-200 rounded-lg shadow-sm hover:shadow-md cursor-pointer bg-white transition"
               onClick={() => handleViewDetails(order.id.toString())}
             >
-              {/* Left: Order info */}
               <div className="flex-1 text-gray-700 text-sm space-y-1">
                 <p><span className="font-medium">Order:</span> #{order.id}</p>
                 <p><span className="font-medium">Status:</span> <span className="text-blue-600">{order.status}</span></p>
                 <p><span className="font-medium">Placed on:</span> {new Date(order.createdAt).toLocaleDateString()}</p>
-                <p><span className="font-medium">Total:</span> ₹{order.totalAmount.toLocaleString()}</p>
+                <p><span className="font-medium">Total:</span> â‚¹{order.totalAmount.toLocaleString()}</p>
                 <p><span className="font-medium">Ship To:</span> {order.deliveryName}</p>
               </div>
 
-              {/* Right: Product images */}
               <div className="flex space-x-2 ml-4">
                 {order.items.slice(0, 3).map((item) => (
                   <div
@@ -193,6 +215,21 @@ export default function OrderPage() {
             </div>
           ))}
         </div>
+        <PaginationControls
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          totalPages={totalPages}
+          currentCount={orders.length}
+          itemLabel="orders"
+          isLoading={refreshing}
+          onPageChange={(nextPage) => setPage(nextPage)}
+          onPageSizeChange={(nextPageSize) => {
+            setPage(1);
+            setPageSize(nextPageSize);
+          }}
+        />
+        </>
       )}
 
       {selectedOrder && (
@@ -204,86 +241,86 @@ export default function OrderPage() {
               setSelectedShipment(null);
             }}
           >
-            ← Back to Orders
+            â† Back to Orders
           </button>
 
           {detailsLoading ? (
             <OrderDetailsSkeleton />
           ) : (
             <div className="p-4 border border-gray-200 rounded-lg shadow-sm bg-white">
-            <h3 className="text-xl font-semibold mb-3 text-gray-800">Order Details: #{selectedOrder.id}</h3>
+              <h3 className="text-xl font-semibold mb-3 text-gray-800">Order Details: #{selectedOrder.id}</h3>
 
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <p className="text-sm text-gray-700">
-                <span className="font-medium">Order Status:</span>{" "}
-                <span className="text-blue-600">{selectedOrder.status}</span>
-              </p>
-              {canCancel && (
-                <button
-                  type="button"
-                  className="px-3 py-2 rounded border border-red-200 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
-                  disabled={cancelling}
-                  onClick={async () => {
-                    const ok = confirm(`Cancel order #${selectedOrder.id}?`);
-                    if (!ok) return;
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Order Status:</span>{" "}
+                  <span className="text-blue-600">{selectedOrder.status}</span>
+                </p>
+                {canCancel && (
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded border border-red-200 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
+                    disabled={cancelling}
+                    onClick={async () => {
+                      const ok = confirm(`Cancel order #${selectedOrder.id}?`);
+                      if (!ok) return;
 
-                    setCancelling(true);
-                    try {
-                      const res = await cancelMyOrder(selectedOrder.id);
-                      if (res.success) {
-                        toast.success("Order cancelled");
-                        await handleViewDetails(String(selectedOrder.id));
-                        await refreshOrders();
-                      } else {
-                        toast.error(res.message || "Cancel failed");
+                      setCancelling(true);
+                      try {
+                        const res = await cancelMyOrder(selectedOrder.id);
+                        if (res.success) {
+                          toast.success("Order cancelled");
+                          await handleViewDetails(String(selectedOrder.id));
+                          await refreshOrders();
+                        } else {
+                          toast.error(res.message || "Cancel failed");
+                        }
+                      } finally {
+                        setCancelling(false);
                       }
-                    } finally {
-                      setCancelling(false);
-                    }
-                  }}
-                >
-                  {cancelling ? "Cancelling..." : "Cancel Order"}
-                </button>
-              )}
-            </div>
-            <div className="text-gray-700 text-sm mb-4 space-y-1">
-              <p><span className="font-medium">Placed on:</span> {new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
-              <p><span className="font-medium">Ship To:</span> {selectedOrder.deliveryName}</p>
-              <p><span className="font-medium">Total Amount:</span> ₹{selectedOrder.totalAmount.toLocaleString()}</p>
-            </div>
+                    }}
+                  >
+                    {cancelling ? "Cancelling..." : "Cancel Order"}
+                  </button>
+                )}
+              </div>
+              <div className="text-gray-700 text-sm mb-4 space-y-1">
+                <p><span className="font-medium">Placed on:</span> {new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
+                <p><span className="font-medium">Ship To:</span> {selectedOrder.deliveryName}</p>
+                <p><span className="font-medium">Total Amount:</span> â‚¹{selectedOrder.totalAmount.toLocaleString()}</p>
+              </div>
 
-            <h4 className="text-lg font-medium mb-2 text-gray-800">Shipping</h4>
-            <div className="border border-gray-100 rounded p-3 bg-gray-50 text-sm text-gray-700 mb-4 space-y-1">
-              {selectedShipment ? (
-                <>
-                  <p><span className="font-medium">Status:</span> {selectedShipment.status}</p>
-                  <p><span className="font-medium">Courier:</span> {selectedShipment.courier}</p>
-                  <p><span className="font-medium">Tracking Number:</span> {selectedShipment.trackingNumber ?? "N/A"}</p>
-                </>
-              ) : (
-                <p className="text-gray-600">Shipment status will appear once your order is shipped.</p>
-              )}
-            </div>
+              <h4 className="text-lg font-medium mb-2 text-gray-800">Shipping</h4>
+              <div className="border border-gray-100 rounded p-3 bg-gray-50 text-sm text-gray-700 mb-4 space-y-1">
+                {selectedShipment ? (
+                  <>
+                    <p><span className="font-medium">Status:</span> {selectedShipment.status}</p>
+                    <p><span className="font-medium">Courier:</span> {selectedShipment.courier}</p>
+                    <p><span className="font-medium">Tracking Number:</span> {selectedShipment.trackingNumber ?? "N/A"}</p>
+                  </>
+                ) : (
+                  <p className="text-gray-600">Shipment status will appear once your order is shipped.</p>
+                )}
+              </div>
 
-            <h4 className="text-lg font-medium mb-2 text-gray-800">Products</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {selectedOrder.items.map((item) => (
-                <div key={item.productId} className="border border-gray-100 p-2 rounded flex flex-col items-center bg-gray-50 text-sm">
-                  <div className="relative w-24 h-24 overflow-hidden rounded bg-white mb-2">
-                    <Image
-                      src={item.image || "/fallback.png"}
-                      alt={item.name || "Product"}
-                      fill
-                      className="object-cover"
-                      sizes="96px"
-                    />
+              <h4 className="text-lg font-medium mb-2 text-gray-800">Products</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {selectedOrder.items.map((item) => (
+                  <div key={item.productId} className="border border-gray-100 p-2 rounded flex flex-col items-center bg-gray-50 text-sm">
+                    <div className="relative w-24 h-24 overflow-hidden rounded bg-white mb-2">
+                      <Image
+                        src={item.image || "/fallback.png"}
+                        alt={item.name || "Product"}
+                        fill
+                        className="object-cover"
+                        sizes="96px"
+                      />
+                    </div>
+                    <p className="text-center font-medium">{item.name}</p>
+                    <p className="font-semibold text-blue-600 mt-1">â‚¹{item.price.toLocaleString()}</p>
                   </div>
-                  <p className="text-center font-medium">{item.name}</p>
-                  <p className="font-semibold text-blue-600 mt-1">₹{item.price.toLocaleString()}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
           )}
         </div>
       )}

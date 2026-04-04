@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { saveOrUpdateCart, getCartItems, getCartTotal, increaseCartItem, decreaseCartItem } from "@/lib/actions/action";
+import { getOrCreateCookieId } from "@/lib/cookieId";
 import type { CartTotal } from "@/lib/data";
 import Cookies from "js-cookie";
 
@@ -43,17 +44,9 @@ const useCart = create<CartStore>((set, get) => ({
 
   // ✅ Always hydrate cookieId from localStorage on mount, generate if not present
   initCookieId: () => {
-    if (typeof window !== "undefined") {
-      let stored = Cookies.get("cookieId") || localStorage.getItem("cookieId");
-      if (!stored || !/^-?\d+$/.test(stored)) {
-        // Negative ids avoid collisions with real user ids.
-        stored = String(-(1000000000 + Math.floor(Math.random() * 1000000000)));
-        Cookies.set("cookieId", stored, { path: "/" });
-        localStorage.setItem("cookieId", stored);
-      }
-      if (!get().cookieId) {
-        set({ cookieId: stored });
-      }
+    const cookieId = getOrCreateCookieId();
+    if (cookieId && get().cookieId !== cookieId) {
+      set({ cookieId });
     }
   },
 
@@ -61,9 +54,8 @@ const useCart = create<CartStore>((set, get) => ({
     // Ensure cookieId is initialized
     get().initCookieId();
     let cookieId = get().cookieId;
-
-    if (!cookieId && typeof window !== "undefined") {
-      cookieId = Cookies.get("cookieId") || localStorage.getItem("cookieId") || null;
+    if (!cookieId) {
+      cookieId = getOrCreateCookieId();
       if (cookieId) set({ cookieId });
     }
     if (!cookieId) return;
@@ -90,7 +82,7 @@ const useCart = create<CartStore>((set, get) => ({
   },
 
   fetchTotal: async () => {
-    const cookieId = get().cookieId || Cookies.get("cookieId") || localStorage.getItem("cookieId");
+    const cookieId = get().cookieId || getOrCreateCookieId();
     if (!cookieId) return;
 
     const totalData = await getCartTotal();

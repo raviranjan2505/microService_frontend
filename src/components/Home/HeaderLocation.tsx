@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MapPin } from "lucide-react";
-import Cookies from "js-cookie";
 
 import type { Address } from "@/lib/data";
 import { getAddresses } from "@/lib/actions/action";
@@ -22,12 +21,10 @@ function formatAddressLine(addr: Address) {
 
 export default function HeaderLocation() {
   const selectedAddress = useAddressStore((s) => s.selectedAddress);
-
-  const loginToken = useLoginStore((s) => s.token);
-  const signupToken = useSignupStore((s) => s.token);
+  const loginUser = useLoginStore((s) => s.user);
+  const signupUser = useSignupStore((s) => s.user);
+  const isAuthenticated = !!(loginUser || signupUser);
   const [mounted, setMounted] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-
   const [fallbackAddress, setFallbackAddress] = useState<Address | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -36,16 +33,11 @@ export default function HeaderLocation() {
   }, []);
 
   useEffect(() => {
-    if (!mounted) return;
-    setToken(loginToken || signupToken || Cookies.get("authToken") || null);
-  }, [mounted, loginToken, signupToken]);
-
-  useEffect(() => {
     let cancelled = false;
 
     async function loadDefaultAddress() {
       if (!mounted) return;
-      if (!token) {
+      if (!isAuthenticated) {
         setFallbackAddress(null);
         return;
       }
@@ -68,17 +60,16 @@ export default function HeaderLocation() {
     return () => {
       cancelled = true;
     };
-  }, [mounted, token, selectedAddress]);
+  }, [mounted, isAuthenticated, selectedAddress]);
 
   const addr = selectedAddress || fallbackAddress;
 
   const line = useMemo(() => {
-    // Keep the first render deterministic across SSR and client hydration.
     if (!mounted) return "Select delivery location";
-    if (!token) return "Login to add address";
+    if (!isAuthenticated) return "Login to add address";
     if (!addr) return "Select delivery location";
     return formatAddressLine(addr);
-  }, [addr, mounted, token]);
+  }, [addr, mounted, isAuthenticated]);
 
   return (
     <Link
@@ -90,7 +81,7 @@ export default function HeaderLocation() {
         <MapPin className="h-4 w-4 text-green-700 mt-0.5 flex-shrink-0" />
         <div className="min-w-0">
           <p className="font-semibold leading-4">Delivery in 12 minutes</p>
-          {mounted && token && !addr && loading ? (
+          {mounted && isAuthenticated && !addr && loading ? (
             <div className="mt-1 space-y-1">
               <Skeleton className="h-3 w-40" />
               <Skeleton className="h-3 w-28" />

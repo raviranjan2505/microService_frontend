@@ -1,4 +1,4 @@
-import axiosInstance from "@/lib/axios";
+import axiosInstance from "@/lib/axiosInstance";
 import { API_ROUTES, API_BASE_URL } from "@/utils/api";
 import type {
   ProductDetails,
@@ -12,6 +12,22 @@ import type {
   Order,
   OrderDetail,
 } from "@/lib/data";
+
+export type ProductPageData<T> = {
+  items: T[];
+  pageNumber: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+};
+
+export type OrdersPageData = {
+  items: Order[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
 
 function toAddressPayload(address: Partial<Address>) {
   const fullName = (address.fullName || address.name || "").trim();
@@ -47,24 +63,39 @@ export const getProductDetails = async (
   }
 };
 
-export const getProductsBySearch = async (query: string): Promise<ProductDetails[]> => {
+export const getProductsBySearchPage = async (
+  query: string,
+  page = 1,
+  pageSize = 20
+): Promise<ProductPageData<ProductDetails> | null> => {
   try {
-    const res = await axiosInstance.get(
-      `${API_ROUTES.PRODUCTS}/search?q=${encodeURIComponent(query)}`
-    );
+    const res = await axiosInstance.get(`${API_ROUTES.PRODUCTS}/search`, {
+      params: { q: query, page, pageSize },
+    });
 
     const payload = res.data?.data ?? null;
-    const items = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.items)
+    const items = Array.isArray(payload?.items)
       ? payload.items
-      : [];
+      : Array.isArray(payload)
+        ? payload
+        : [];
 
-    return Array.isArray(items) ? (items as ProductDetails[]) : [];
+    return {
+      items: Array.isArray(items) ? (items as ProductDetails[]) : [],
+      pageNumber: Number(payload?.pageNumber ?? page),
+      pageSize: Number(payload?.pageSize ?? pageSize),
+      totalCount: Number(payload?.totalCount ?? items.length ?? 0),
+      totalPages: Math.max(1, Number(payload?.totalPages ?? 1)),
+    };
   } catch (err) {
-    console.error("getProductsBySearch error:", err);
-    return [];
+    console.error("getProductsBySearchPage error:", err);
+    return null;
   }
+};
+
+export const getProductsBySearch = async (query: string): Promise<ProductDetails[]> => {
+  const data = await getProductsBySearchPage(query, 1, 20);
+  return data?.items ?? [];
 };
 
 // ✅ Get all categories - with caching
@@ -224,9 +255,8 @@ export const getActiveBanners = async (): Promise<Banner[]> => {
 // Get all addresses
 export const getAddresses = async (): Promise<Address[]> => {
   try {
-    const res = await fetch("/api/address", { method: "GET", cache: "no-store" });
-    const json = await res.json();
-    return json?.data || [];
+    const res = await axiosInstance.get<{ data?: Address[] }>(API_ROUTES.ADDRESS);
+    return res.data?.data || [];
   } catch (error) {
     console.error("Error fetching addresses:", error)
     return []
@@ -239,13 +269,8 @@ export const addAddress = async (
 ): Promise<Address | null> => {
   try {
     const payload = toAddressPayload(address);
-    const res = await fetch("/api/address", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const json = await res.json();
-    return json?.data || null;
+    const res = await axiosInstance.post<{ data?: Address }>(API_ROUTES.ADDRESS, payload);
+    return res.data?.data || null;
   } catch (error: any) {
     console.error("Error adding address:", error.response?.data || error.message);
     return null;
@@ -262,12 +287,8 @@ export const updateAddress = async (
   try {
     if (!address.id) return false;
     const payload = toAddressPayload(address);
-    const res = await fetch(`/api/address/${address.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return res.ok;
+    await axiosInstance.put(`${API_ROUTES.ADDRESS}/${address.id}`, payload);
+    return true;
   } catch (error: any) {
     console.error("Error updating address:", error.response?.data || error.message);
     return false;
@@ -279,8 +300,8 @@ export const updateAddress = async (
 //Delete address
 export const deleteAddress = async (id: number): Promise<boolean> => {
   try {
-    const res = await fetch(`/api/address/${id}`, { method: "DELETE" });
-    return res.ok;
+    await axiosInstance.delete(`${API_ROUTES.ADDRESS}/${id}`);
+    return true;
   } catch (error) {
     console.error("Error deleting address:", error)
     return false
@@ -425,12 +446,38 @@ export const getMyOrder = async (): Promise<Order[] | null> => {
   }
 };
 
+export const getMyOrdersPage = async (
+  page: number = 1,
+  pageSize: number = 10
+): Promise<OrdersPageData | null> => {
+  try {
+    const res = await axiosInstance.get(`${API_ROUTES.ORDERS}`, {
+      params: { page, pageSize },
+    });
+
+    const payload = res.data?.data;
+    const items = Array.isArray(payload?.items) ? (payload.items as Order[]) : [];
+
+    return {
+      items,
+      page: Number(payload?.page ?? page),
+      pageSize: Number(payload?.pageSize ?? pageSize),
+      total: Number(payload?.total ?? 0),
+      totalPages: Math.max(1, Number(payload?.totalPages ?? 1)),
+    };
+  } catch (error) {
+    console.error("Error fetching paginated orders:", error);
+    return null;
+  }
+};
+
 
 export const getOrderDetails = async (orderNo: string): Promise<OrderDetail | null> => {
   try {
     const res = await axiosInstance.get(
       `${API_ROUTES.ORDERS}/${orderNo}`
     );
+    console.log("res from order detaisl", res)
     return res.data.data;
   } catch (error) {
     console.error("Error fetching order details:", error);
@@ -449,5 +496,3 @@ export const cancelMyOrder = async (orderId: string | number): Promise<{ success
     };
   }
 };
-
-

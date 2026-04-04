@@ -2,28 +2,30 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Package } from "lucide-react";
+import { Bell, MapPin, Package } from "lucide-react";
 
 import { useLoginStore } from "@/app/store/useLoginStore";
 import { useSignupStore } from "@/app/store/useSignupStore";
-import { getAddresses, getMyOrder } from "@/lib/actions/action";
-import type { Address, Order } from "@/lib/data";
+import { getAddresses, getMyOrdersPage } from "@/lib/actions/action";
+import { getMyUnreadNotificationCount } from "@/lib/actions/notifications";
+import type { Address } from "@/lib/data";
 
 export default function AccountPage() {
   const loginUser = useLoginStore((s) => s.user);
   const signupUser = useSignupStore((s) => s.user);
   const user = loginUser || signupUser;
 
-  const [orders, setOrders] = useState<Order[] | null>(null);
+  const [ordersCount, setOrdersCount] = useState<number | null>(null);
   const [addresses, setAddresses] = useState<Address[] | null>(null);
+  const [notificationCount, setNotificationCount] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const o = await getMyOrder();
-        setOrders(o || []);
+        const ordersPage = await getMyOrdersPage(1, 1);
+        setOrdersCount(ordersPage?.total ?? 0);
       } catch {
-        setOrders([]);
+        setOrdersCount(0);
       }
 
       try {
@@ -31,6 +33,13 @@ export default function AccountPage() {
         setAddresses(a || []);
       } catch {
         setAddresses([]);
+      }
+
+      try {
+        const unread = await getMyUnreadNotificationCount();
+        setNotificationCount(unread);
+      } catch {
+        setNotificationCount(0);
       }
     })();
   }, []);
@@ -42,47 +51,62 @@ export default function AccountPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-gray-200 p-4 bg-white">
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="text-xl font-semibold text-gray-800">Account</h2>
-        <p className="text-sm text-gray-600 mt-1">
+        <p className="mt-1 text-sm text-gray-600">
           {user?.email ? `Signed in as ${user.email}` : "Signed in"}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Link
           href="/account/orders"
-          className="rounded-lg border border-gray-200 p-4 bg-white hover:shadow-sm transition flex items-start gap-3"
+          className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 transition hover:shadow-sm"
         >
-          <Package className="w-5 h-5 text-green-700 mt-0.5" />
+          <Package className="mt-0.5 h-5 w-5 text-green-700" />
           <div>
             <p className="font-semibold text-gray-900">My Orders</p>
             <p className="text-sm text-gray-600">
-              {orders === null ? "Loading…" : `${orders.length} order${orders.length === 1 ? "" : "s"}`}
+              {ordersCount === null ? "Loading..." : `${ordersCount} order${ordersCount === 1 ? "" : "s"}`}
             </p>
           </div>
         </Link>
 
         <Link
           href="/account/addresses"
-          className="rounded-lg border border-gray-200 p-4 bg-white hover:shadow-sm transition flex items-start gap-3"
+          className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 transition hover:shadow-sm"
         >
-          <MapPin className="w-5 h-5 text-green-700 mt-0.5" />
+          <MapPin className="mt-0.5 h-5 w-5 text-green-700" />
           <div>
             <p className="font-semibold text-gray-900">My Addresses</p>
             <p className="text-sm text-gray-600">
-              {addresses === null ? "Loading…" : `${addresses.length} saved`}
+              {addresses === null ? "Loading..." : `${addresses.length} saved`}
             </p>
             {defaultAddress && (
-              <p className="text-xs text-gray-500 mt-1 line-clamp-1">
+              <p className="mt-1 line-clamp-1 text-xs text-gray-500">
                 Default: {defaultAddress.address1 || defaultAddress.fullAddress || ""}
               </p>
             )}
           </div>
         </Link>
+
+        <Link
+          href="/account/notifications"
+          className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 transition hover:shadow-sm"
+        >
+          <Bell className="mt-0.5 h-5 w-5 text-green-700" />
+          <div>
+            <p className="font-semibold text-gray-900">Notifications</p>
+            <p className="text-sm text-gray-600">
+              {notificationCount === null
+                ? "Loading..."
+                : `${notificationCount} unread notification${notificationCount === 1 ? "" : "s"}`}
+            </p>
+          </div>
+        </Link>
       </div>
 
-      <div className="rounded-lg border border-gray-200 p-4 bg-gray-50">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <p className="text-sm text-gray-700">
           Tip: open an order to see shipping status and tracking number (if available).
         </p>

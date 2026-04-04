@@ -1,6 +1,6 @@
 "use client";
 
-import axiosInstance from "@/lib/axios";
+import axiosInstance from "@/lib/axiosInstance";
 
 export type Shipment = {
   id: number;

@@ -2,9 +2,8 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import axiosInstance from "@/lib/axios";
+import axiosInstance from "@/lib/axiosInstance";
 import { API_ROUTES } from "@/utils/api";
-import Cookies from "js-cookie";
 
 type User = {
   id: string;
@@ -15,7 +14,6 @@ type User = {
 
 type SignupStore = {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
@@ -32,14 +30,12 @@ type SignupStore = {
 
   signup: (payload: { email: string; password: string; name?: string }) => Promise<boolean>;
   logout: () => void;
-  loadTokenFromCookie: () => void;
 };
 
 export const useSignupStore = create<SignupStore>()(
   persist(
     (set) => ({
       user: null,
-      token: Cookies.get("authToken") ?? null,
       isLoading: false,
       error: null,
       successMessage: null,
@@ -68,23 +64,7 @@ export const useSignupStore = create<SignupStore>()(
             username: name?.trim() || undefined,
           });
 
-          const token = response.data?.accessToken ?? null;
-          const refreshToken = response.data?.refreshToken ?? null;
           const userId = response.data?.userId ?? null;
-
-          if (!token) {
-            set({ isLoading: false, error: response.data?.message || "Signup failed" });
-            return false;
-          }
-
-          Cookies.set("authToken", token, { path: "/", sameSite: "Lax" });
-          if (refreshToken) {
-            Cookies.set("refreshToken", refreshToken, {
-              path: "/",
-              sameSite: "Lax",
-              expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            });
-          }
 
           set({
             user: userId
@@ -95,7 +75,6 @@ export const useSignupStore = create<SignupStore>()(
                   role: "USER",
                 }
               : null,
-            token,
             isLoading: false,
             successMessage: "Signup successful!",
             error: null,
@@ -115,11 +94,8 @@ export const useSignupStore = create<SignupStore>()(
       },
 
       logout: () => {
-        Cookies.remove("authToken");
-        Cookies.remove("refreshToken");
         set({
           user: null,
-          token: null,
           isLoading: false,
           successMessage: null,
           error: null,
@@ -128,20 +104,12 @@ export const useSignupStore = create<SignupStore>()(
           name: "",
         });
       },
-
-      loadTokenFromCookie: () => {
-        const token = Cookies.get("authToken") ?? null;
-        set({ token });
-      },
     }),
     {
       name: "signup-storage",
       version: 2,
       partialize: (state) => ({ user: state.user }),
       migrate: (persistedState: any) => ({ user: persistedState?.user ?? null }),
-      onRehydrateStorage: () => (state) => {
-        state?.loadTokenFromCookie?.();
-      },
     }
   )
 );

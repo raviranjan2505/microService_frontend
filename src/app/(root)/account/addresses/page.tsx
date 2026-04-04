@@ -1,10 +1,11 @@
 "use client";
 import { Plus, Edit, Trash2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import AddressDialog from "@/app/(root)/cart/AddressDialog";
 import LoginDialog from "@/app/(auth)/login-in/LoginDialog";
 import { useLoginStore } from "@/app/store/useLoginStore";
 import { useSignupStore } from "@/app/store/useSignupStore";
+import PaginationControls from "@/components/common/PaginationControls";
 import {
     getAddresses,
     addAddress,
@@ -12,9 +13,9 @@ import {
     deleteAddress,
 } from "@/lib/actions/action";
 import type { Address } from "@/lib/data";
-import Cookies from "js-cookie";
 import Skeleton from "@/components/Loaders/Skeleton";
 
+const DEFAULT_PAGE_SIZE = 5;
 
 export default function AddressesPage() {
 
@@ -23,12 +24,14 @@ export default function AddressesPage() {
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [editingAddress, setEditingAddress] = useState<Address | null>(null);
     const [loading, setLoading] = useState(false);
-    const loginToken = useLoginStore((s) => s.token);
-    const signupToken = useSignupStore((s) => s.token);
-    const token = loginToken || signupToken || Cookies.get("authToken") || null;
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+    const loginUser = useLoginStore((s) => s.user);
+    const signupUser = useSignupStore((s) => s.user);
+    const isAuthenticated = !!(loginUser || signupUser);
 
-    const loadAddresses = async () => {
-        if (!token) return;
+    const loadAddresses = useCallback(async () => {
+        if (!isAuthenticated) return;
         setLoading(true);
         try {
             const data = await getAddresses();
@@ -36,15 +39,14 @@ export default function AddressesPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [isAuthenticated]);
 
     useEffect(() => {
-        loadAddresses();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [token]);
+        void loadAddresses();
+    }, [loadAddresses]);
 
     const handleSaveAddress = async (data: Address) => {
-        if (!token) {
+        if (!isAuthenticated) {
             setLoginOpen(true);
             return;
         }
@@ -65,19 +67,35 @@ export default function AddressesPage() {
         }
     };
 
+    const totalPages = useMemo(() => {
+        return Math.max(1, Math.ceil(addresses.length / pageSize));
+    }, [addresses.length, pageSize]);
+
+    const paginatedAddresses = useMemo(() => {
+        const safePage = Math.min(page, totalPages);
+        const start = (safePage - 1) * pageSize;
+        return addresses.slice(start, start + pageSize);
+    }, [addresses, page, pageSize, totalPages]);
+
+    useEffect(() => {
+        if (page > totalPages) {
+            setPage(totalPages);
+        }
+    }, [page, totalPages]);
+
     const handleEdit = (addr: Address) => {
         setEditingAddress(addr);
         setAddressDialogOpen(true);
     };
 
     const handleDelete = async (id: number) => {
-        if (!token) return;
+        if (!isAuthenticated) return;
         const ok = await deleteAddress(id);
         if (ok) await loadAddresses();
     };
 
     const handleAddNewAddress = () => {
-        if (token) {
+        if (isAuthenticated) {
             setEditingAddress(null);
             setAddressDialogOpen(true);
         } else {
@@ -107,15 +125,14 @@ export default function AddressesPage() {
                         ))}
                     </div>
                 )}
-                {addresses.map((addr) => (
+                {paginatedAddresses.map((addr) => (
                     <div
                         key={addr.id}
                         className={`border rounded-lg p-3 hover:border-green-600 transition ${addr.isDefault ? "border-green-600 bg-green-50" : ""
                             }`}
                     >
                         <div className="flex justify-between items-start">
-                            <div
-                            >
+                            <div>
                                 <p className="font-medium">
                                     {addr.type} {addr.isDefault && "(Default)"}
                                 </p>
@@ -130,8 +147,8 @@ export default function AddressesPage() {
                                 <button onClick={() => handleEdit(addr)} className="text-blue-600">
                                     <Edit className="w-5 h-5" />
                                 </button>
-                                <button 
-                                  onClick={() => addr.id && handleDelete(addr.id)} 
+                                <button
+                                  onClick={() => addr.id && handleDelete(addr.id)}
                                   className="text-red-600"
                                   disabled={!addr.id}
                                 >
@@ -142,6 +159,21 @@ export default function AddressesPage() {
                     </div>
                 ))}
             </div>
+
+            <PaginationControls
+                page={Math.min(page, totalPages)}
+                pageSize={pageSize}
+                totalCount={addresses.length}
+                totalPages={totalPages}
+                currentCount={paginatedAddresses.length}
+                itemLabel="addresses"
+                isLoading={loading}
+                onPageChange={(nextPage) => setPage(nextPage)}
+                onPageSizeChange={(nextPageSize) => {
+                    setPage(1);
+                    setPageSize(nextPageSize);
+                }}
+            />
 
             <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
 
@@ -157,15 +189,3 @@ export default function AddressesPage() {
         </div>
     );
 }
-
-
-
-
-
-
-
-
-
-
-
-

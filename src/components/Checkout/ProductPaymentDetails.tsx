@@ -9,7 +9,7 @@ import useAddressStore from "@/app/store/useAddressStore";
 import useCart from "@/app/store/useCart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import axiosInstance from "@/lib/axios";
+import axiosInstance from "@/lib/axiosInstance";
 import { handleCheckoutAPI } from "@/lib/actions/action";
 import { openRazorpayCheckout } from "@/lib/payments/razorpay";
 import type { CheckoutPaymentMethod } from "./PaymentMethod";

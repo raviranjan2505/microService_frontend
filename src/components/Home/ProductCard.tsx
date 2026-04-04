@@ -30,9 +30,9 @@ export default function ProductCard({ product }: ProductCardProps) {
   const inCart = cartItems.find((c) => c.item.id === product.id)
   const qty = inCart?.quantity || 0
 
-  const loginToken = useLoginStore((s) => s.token)
-  const signupToken = useSignupStore((s) => s.token)
-  const token = loginToken || signupToken
+  const loginUser = useLoginStore((s) => s.user)
+  const signupUser = useSignupStore((s) => s.user)
+  const isAuthenticated = !!(loginUser || signupUser)
 
   const wishlistToggle = useWishlistStore((s) => s.toggle)
   const isWishlisted = useWishlistStore((s) => s.isWishlisted)
@@ -49,7 +49,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           e.preventDefault()
           e.stopPropagation()
 
-          if (!token) {
+          if (!isAuthenticated) {
             toast.error("Please login to use wishlist")
             return
           }
@@ -68,7 +68,6 @@ export default function ProductCard({ product }: ProductCardProps) {
           fill={wished ? "currentColor" : "none"}
         />
       </button>
-      {/* Product Image */}
       <Link href={`/products/${product.categoryId}/${product.slag}`} className="block">
         <div className="relative w-full h-36 md:h-40 lg:h-44 mb-2">
           <Image
@@ -81,7 +80,6 @@ export default function ProductCard({ product }: ProductCardProps) {
         </div>
       </Link>
 
-      {/* Product Details */}
       <div className="flex flex-col gap-1">
         {product.deliveryTime && (
           <span className="text-[10px] sm:text-xs text-green-600 font-medium">
@@ -98,7 +96,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         <div className="flex items-center justify-between mt-2">
           <span className="text-[11px] sm:text-xs font-semibold text-gray-800">
-            ₹{product.price}
+            â‚¹{product.price}
           </span>
 
           {qty === 0 ? (
@@ -116,7 +114,7 @@ export default function ProductCard({ product }: ProductCardProps) {
                 className="text-green-600 font-bold text-[11px] sm:text-base"
                 onClick={() => decreaseQuantity(product.id)}
               >
-                −
+                âˆ’
               </button>
               <span className="text-[11px] sm:text-sm">{qty}</span>
               <button

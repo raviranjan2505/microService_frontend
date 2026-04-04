@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, Plus, Edit, Trash2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import AddressDialog from "@/app/(root)/cart/AddressDialog";
 import LoginDialog from "@/app/(auth)/login-in/LoginDialog";
 import { useLoginStore } from "@/app/store/useLoginStore";
@@ -13,7 +13,6 @@ import {
   deleteAddress,
 } from "@/lib/actions/action";
 import type { Address } from "@/lib/data";
-import Cookies from "js-cookie";
 import Skeleton from "@/components/Loaders/Skeleton";
 
 interface AddressViewProps {
@@ -28,13 +27,12 @@ export default function AddressView({ onBack, onSelectAddress }: AddressViewProp
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const loginToken = useLoginStore((s) => s.token);
-  const signupToken = useSignupStore((s) => s.token);
-  const token = loginToken || signupToken || Cookies.get("authToken") || null;
+  const loginUser = useLoginStore((s) => s.user);
+  const signupUser = useSignupStore((s) => s.user);
+  const isAuthenticated = !!(loginUser || signupUser);
 
-  // Load addresses
-  const loadAddresses = async () => {
-    if (!token) return;
+  const loadAddresses = useCallback(async () => {
+    if (!isAuthenticated) return;
     setLoading(true);
     try {
       const data = await getAddresses();
@@ -42,21 +40,20 @@ export default function AddressView({ onBack, onSelectAddress }: AddressViewProp
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    loadAddresses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    void loadAddresses();
+  }, [loadAddresses]);
 
   const handleSaveAddress = async (data: Address) => {
-    if (!token) {
+    if (!isAuthenticated) {
       setLoginOpen(true);
       return;
     }
 
     if (data.id) {
-      const ok = await updateAddress(data); // ✅ send full object with id
+      const ok = await updateAddress(data);
       if (ok) {
         setEditingAddress(null);
         setAddressDialogOpen(false);
@@ -77,19 +74,19 @@ export default function AddressView({ onBack, onSelectAddress }: AddressViewProp
   };
 
   const handleDelete = async (id: number) => {
-    if (!token) return;
+    if (!isAuthenticated) return;
     const ok = await deleteAddress(id);
     if (ok) await loadAddresses();
   };
 
   const handleSetDefault = async (addr: Address) => {
-    if (!token || addr.isDefault) return;
-    const ok = await updateAddress({ ...addr, isDefault: true }); // ✅ consistent API
+    if (!isAuthenticated || addr.isDefault) return;
+    const ok = await updateAddress({ ...addr, isDefault: true });
     if (ok) await loadAddresses();
   };
 
   const handleAddNewAddress = () => {
-    if (token) {
+    if (isAuthenticated) {
       setEditingAddress(null);
       setAddressDialogOpen(true);
     } else {
@@ -153,8 +150,8 @@ export default function AddressView({ onBack, onSelectAddress }: AddressViewProp
                 <button onClick={() => handleEdit(addr)} className="text-blue-600">
                   <Edit className="w-5 h-5" />
                 </button>
-                <button 
-                  onClick={() => addr.id && handleDelete(addr.id)} 
+                <button
+                  onClick={() => addr.id && handleDelete(addr.id)}
                   className="text-red-600"
                   disabled={!addr.id}
                 >

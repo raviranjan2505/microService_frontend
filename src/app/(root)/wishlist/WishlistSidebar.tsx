@@ -19,9 +19,9 @@ interface WishlistSidebarProps {
 }
 
 export default function WishlistSidebar({ open, onClose }: WishlistSidebarProps) {
-  const loginToken = useLoginStore((s) => s.token);
-  const signupToken = useSignupStore((s) => s.token);
-  const token = loginToken || signupToken;
+  const loginUser = useLoginStore((s) => s.user);
+  const signupUser = useSignupStore((s) => s.user);
+  const isAuthenticated = !!(loginUser || signupUser);
 
   const [loginOpen, setLoginOpen] = useState(false);
 
@@ -33,8 +33,7 @@ export default function WishlistSidebar({ open, onClose }: WishlistSidebarProps)
   const toggle = useWishlistStore((s) => s.toggle);
 
   useEffect(() => {
-    if (!open) return;
-    if (!token) return;
+    if (!open || !isAuthenticated) return;
 
     (async () => {
       try {
@@ -44,7 +43,7 @@ export default function WishlistSidebar({ open, onClose }: WishlistSidebarProps)
         // ignore
       }
     })();
-  }, [open, token, fetchEntries, fetchProducts]);
+  }, [open, isAuthenticated, fetchEntries, fetchProducts]);
 
   return (
     <>
@@ -74,7 +73,7 @@ export default function WishlistSidebar({ open, onClose }: WishlistSidebarProps)
               </div>
 
               <div className="flex-1 overflow-y-auto p-4">
-                {!token ? (
+                {!isAuthenticated ? (
                   <div className="space-y-3">
                     <p className="text-sm text-gray-700">Please login to view your wishlist.</p>
                     <Button type="button" onClick={() => setLoginOpen(true)}>
@@ -104,7 +103,7 @@ export default function WishlistSidebar({ open, onClose }: WishlistSidebarProps)
 
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium line-clamp-1">{p.title}</p>
-                          <p className="text-xs text-gray-600">₹{p.price}</p>
+                          <p className="text-xs text-gray-600">â‚¹{p.price}</p>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -143,4 +142,3 @@ export default function WishlistSidebar({ open, onClose }: WishlistSidebarProps)
     </>
   );
 }
-

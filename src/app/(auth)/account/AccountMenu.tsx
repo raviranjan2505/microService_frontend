@@ -13,7 +13,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useLoginStore } from "@/app/store/useLoginStore"
 import { useSignupStore } from "@/app/store/useSignupStore"
-import { Package, Gift, MapPin,  Shield } from "lucide-react";
+import { Bell, Package, Gift, MapPin, Shield } from "lucide-react";
 import { useRouter } from "next/navigation"
 
 export default function AccountMenu() {
@@ -35,6 +35,7 @@ export default function AccountMenu() {
    const menuItems = [
     { href: "/account/addresses", icon: MapPin, label: "My Addresses" },
     { href: "/account/orders", icon: Package, label: "My Orders" },
+    { href: "/account/notifications", icon: Bell, label: "Notifications" },
     { href: "/account/gift-cards", icon: Gift, label: "E-Gift Cards" },
     { href: "/account/privacy", icon: Shield, label: "Account Privacy" },
   ];

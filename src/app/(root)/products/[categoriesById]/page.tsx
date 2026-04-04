@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import {
   getCategoryById,
   getProductsBySlug,
@@ -9,8 +9,9 @@ import {
 import ProductCard, { UIProductCard } from "@/components/Home/ProductCard";
 import SkeletonLoader from "@/components/Loaders/SkeletonLoader";
 import { API_BASE_URL } from "@/utils/api";
-import React from "react";
-import { use } from "react"; 
+import { useInfiniteWindowScroll } from "@/hooks/useInfiniteWindowScroll";
+
+const PAGE_SIZE = 20;
 
 interface CategoryPageProps {
   params: Promise<{ categoriesById: string }>;
@@ -19,152 +20,133 @@ interface CategoryPageProps {
 interface CategoryNode {
   categoryId: number;
   categoryName: string;
-  slagurl: string;
-  thumbnail?: string;
-  subcategories: CategoryNode[];
+  slug: string;
+}
+
+function mapProducts(items: any[]): UIProductCard[] {
+  return items.map(
+    (product: any): UIProductCard => ({
+      id: String(product.id),
+      categoryId: String(product.categoryId),
+      title: product.productName,
+      subtitle: product.shortDescription || product.productCode,
+      price: Number(product.dp ?? 0),
+      slag: product.productSlug || product.productCode,
+      img: product.defaultImage?.startsWith("http")
+        ? product.defaultImage
+        : product.defaultImage
+          ? `${API_BASE_URL}${product.defaultImage}`
+          : "/image/bread.png",
+      deliveryTime: "16 MINS",
+    })
+  );
 }
 
 export default function CategoryWithProducts({ params }: CategoryPageProps) {
-  const unwrappedParams = use(params);
-  const { categoriesById } = unwrappedParams;
+  const { categoriesById } = use(params);
 
   const [subcategories, setSubcategories] = useState<CategoryNode[]>([]);
   const [products, setProducts] = useState<UIProductCard[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [parentSlug, setParentSlug] = useState<string>("");
-  const PAGE_SIZE = 50;
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [parentSlug, setParentSlug] = useState("");
+  const [activeSubcategorySlug, setActiveSubcategorySlug] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const mapProductsToUI = (items: any[]): UIProductCard[] =>
-    items.map(
-      (p: any): UIProductCard => ({
-        id: String(p.id),
-        categoryId: String(p.categoryId),
-        title: p.productName,
-        subtitle: p.productCode,
-        price: Number(p.dp ?? 0),
-        slag: p.productSlug || p.productCode,
-        img: p.defaultImage?.startsWith("http")
-          ? p.defaultImage
-          : p.defaultImage
-            ? `${API_BASE_URL}${p.defaultImage}`
-            : "/image/bread.png",
-        deliveryTime: "16 MINS",
-      })
-    );
-
-  const fetchAllCategoryProducts = async (slug: string) => {
-    let page = 1;
-    let totalPages = 1;
-    const allItems: any[] = [];
-
-    while (page <= totalPages) {
-      const prodRes = await getProductsBySlug(slug, page, PAGE_SIZE);
-      const items = Array.isArray(prodRes?.data?.items) ? prodRes.data.items : [];
-      totalPages = Number(prodRes?.data?.totalPages || 1);
-      allItems.push(...items);
-      page += 1;
+  const loadProducts = async (
+    targetPage: number,
+    parentCategorySlug: string,
+    subcategorySlug = "",
+    append = false
+  ) => {
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
     }
 
-    return allItems;
-  };
+    try {
+      const response = subcategorySlug
+        ? await getProductsBySubCategoriesSlug(parentCategorySlug, subcategorySlug, targetPage, PAGE_SIZE)
+        : await getProductsBySlug(parentCategorySlug, targetPage, PAGE_SIZE);
 
-  const fetchAllSubcategoryProducts = async (parent: string, subcategorySlug: string) => {
-    let page = 1;
-    let totalPages = 1;
-    const allItems: any[] = [];
+      const payload = response?.data;
+      const mapped = mapProducts(Array.isArray(payload?.items) ? payload.items : []);
 
-    while (page <= totalPages) {
-      const prodRes = await getProductsBySubCategoriesSlug(parent, subcategorySlug, page, PAGE_SIZE);
-      const items = Array.isArray(prodRes?.data?.items) ? prodRes.data.items : [];
-      totalPages = Number(prodRes?.data?.totalPages || 1);
-      allItems.push(...items);
-      page += 1;
+      setProducts((previous) => (append ? [...previous, ...mapped] : mapped));
+      setPage(Number(payload?.pageNumber ?? targetPage));
+      setTotalPages(Math.max(1, Number(payload?.totalPages ?? 1)));
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
-
-    return allItems;
   };
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchCategory = async () => {
+      setLoading(true);
+      setProducts([]);
+      setSubcategories([]);
+      setParentSlug("");
+      setActiveSubcategorySlug("");
+      setPage(1);
+      setTotalPages(1);
+
       try {
-        setLoading(true);
+        const categoryResponse = await getCategoryById(Number(categoriesById));
+        const category = categoryResponse?.data;
+        const resolvedParentSlug = category?.slug || "";
 
-        console.log("Fetching category for ID:", categoriesById);
-        const catRes = await getCategoryById(Number(categoriesById));
-        console.log("Category response:", catRes);
-
-        if (catRes?.data) {
-          const parentSlugFromApi = catRes.data.slug;
-          console.log("Parent slug:", parentSlugFromApi);
-          setParentSlug(parentSlugFromApi);
-
-          if (catRes.data.subcategories?.length > 0) {
-            const mappedSubs = catRes.data.subcategories.map((sub: any) => ({
-              categoryId: sub.id,
-              categoryName: sub.name,
-              slagurl: sub.slug || sub.slagurl || "",
-              thumbnail: sub.image,
-              subcategories: sub.subcategories || [],
-            }));
-            setSubcategories(mappedSubs);
-            console.log("Subcategories set:", mappedSubs);
-          }
-
-          // default products (parent category)
-          if (parentSlugFromApi) {
-            const allItems = await fetchAllCategoryProducts(parentSlugFromApi);
-            console.log("Products for parent category:", allItems.length);
-            if (allItems.length > 0) {
-              const mapped = mapProductsToUI(allItems);
-              setProducts(mapped);
-              console.log("Products mapped and set:", mapped);
-            } else {
-              console.log("No products found in response");
-            }
-          } else {
-            console.log("No parent slug available");
-          }
-        } else {
-          console.log("No category data received");
+        if (!resolvedParentSlug) {
+          setProducts([]);
+          return;
         }
-      } catch (error) {
-        console.error("Error in fetchData:", error);
+
+        setParentSlug(resolvedParentSlug);
+        setSubcategories(
+          Array.isArray(category?.subcategories)
+            ? category.subcategories.map((subcategory: any) => ({
+                categoryId: subcategory.id,
+                categoryName: subcategory.name,
+                slug: subcategory.slug || "",
+              }))
+            : []
+        );
+
+        await loadProducts(1, resolvedParentSlug);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    void fetchCategory();
   }, [categoriesById]);
 
-  // ✅ load products by subcategory click
-  const handleSubcategoryClick = async (subcategorySlug: string) => {
-    try {
-      if (!subcategorySlug || !parentSlug) {
-        setProducts([]);
-        return;
-      }
-      setLoading(true);
-      const allItems = await fetchAllSubcategoryProducts(parentSlug, subcategorySlug);
+  useInfiniteWindowScroll({
+    enabled: !loading && !loadingMore && !!parentSlug && page < totalPages,
+    onLoadMore: () => {
+      void loadProducts(page + 1, parentSlug, activeSubcategorySlug, true);
+    },
+  });
 
-      if (allItems.length > 0) {
-        const mapped = mapProductsToUI(allItems);
-        setProducts(mapped);
-      } else {
-        setProducts([]);
-      }
-    } finally {
-      setLoading(false);
-    }
+  const handleSubcategoryClick = async (subcategorySlug = "") => {
+    if (!parentSlug) return;
+
+    setActiveSubcategorySlug(subcategorySlug);
+    setProducts([]);
+    setPage(1);
+    setTotalPages(1);
+    await loadProducts(1, parentSlug, subcategorySlug);
   };
 
   if (loading) {
     return (
       <div className="flex">
-        <aside className="w-52 border-r bg-white h-screen sticky top-0 overflow-y-auto">
+        <aside className="sticky top-0 h-screen w-52 overflow-y-auto border-r bg-white">
           <SkeletonLoader type="category" count={5} />
         </aside>
-        <main className="flex-1 p-4 bg-gray-50">
+        <main className="flex-1 bg-gray-50 p-4">
           <SkeletonLoader type="product" count={8} />
         </main>
       </div>
@@ -173,30 +155,44 @@ export default function CategoryWithProducts({ params }: CategoryPageProps) {
 
   return (
     <div className="flex">
-      {/* LEFT: Sticky Sidebar */}
-      <aside className="w-32 md:w-40 border-r bg-white h-screen sticky top-0 overflow-y-auto">
-        {subcategories.map((sub) => (
+      <aside className="sticky top-0 h-screen w-32 overflow-y-auto border-r bg-white md:w-40">
+        <button
+          type="button"
+          onClick={() => void handleSubcategoryClick("")}
+          className={`w-full px-4 py-3 text-left transition ${
+            activeSubcategorySlug === "" ? "bg-green-50 font-medium text-green-700" : "hover:bg-gray-100"
+          }`}
+        >
+          All Products
+        </button>
+        {subcategories.map((subcategory) => (
           <button
-            key={sub.categoryId}
-            onClick={() => handleSubcategoryClick(sub.slagurl)} // ✅ fetch by slug
-            className="flex items-center gap-3 w-full px-4 py-2 hover:bg-gray-100 transition"
+            key={subcategory.categoryId}
+            type="button"
+            onClick={() => void handleSubcategoryClick(subcategory.slug)}
+            className={`w-full px-4 py-3 text-left transition ${
+              activeSubcategorySlug === subcategory.slug
+                ? "bg-green-50 font-medium text-green-700"
+                : "hover:bg-gray-100"
+            }`}
           >
-            <div className="w-7 h-7 bg-gray-200 rounded-md hidden md:block" />
-            <span>{sub.categoryName}</span>
+            {subcategory.categoryName}
           </button>
         ))}
       </aside>
 
-      {/* RIGHT: Products Grid */}
-      <main className="flex-1 p-4 overflow-y-auto h-[calc(100vh-100px)] bg-gray-50">
+      <main className="flex-1 bg-gray-50 p-4">
         {products.length === 0 ? (
           <p className="text-gray-500">No products found</p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {products.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+              {products.map((product) => (
+                <ProductCard key={`${product.id}-${product.slag}`} product={product} />
+              ))}
+            </div>
+            {loadingMore ? <p className="py-6 text-center text-sm text-gray-500">Loading more products...</p> : null}
+          </>
         )}
       </main>
     </div>

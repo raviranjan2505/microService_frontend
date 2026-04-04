@@ -7,5 +7,6 @@ export const API_ROUTES = {
   ADDRESS:`${API_BASE_URL}/v1/address`,
   ORDERS:`${API_BASE_URL}/v1/order`,
   CHECKOUTS:`${API_BASE_URL}/v1/checkout`,
-  CARTS:`${API_BASE_URL}/v1/cart`
+  CARTS:`${API_BASE_URL}/v1/cart`,
+  NOTIFICATIONS: `${API_BASE_URL}/v1/notification`,
 };

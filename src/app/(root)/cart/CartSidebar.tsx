@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from "react"
@@ -17,10 +16,9 @@ interface CartSidebarProps {
 }
 
 export default function CartSidebar({ open, onClose }: CartSidebarProps) {
-
-  const loginToken = useLoginStore((s) => s.token)
-  const signupToken = useSignupStore((s) => s.token)
-  const token = loginToken || signupToken
+  const loginUser = useLoginStore((s) => s.user)
+  const signupUser = useSignupStore((s) => s.user)
+  const isAuthenticated = !!(loginUser || signupUser)
 
   const [loginOpen, setLoginOpen] = useState(false)
   const [step, setStep] = useState<"cart" | "address">("cart")
@@ -30,7 +28,7 @@ export default function CartSidebar({ open, onClose }: CartSidebarProps) {
   const goToCart = () => setStep("cart")
 
   const handleChangeAddress = () => {
-    setStep("address") 
+    setStep("address")
   }
 
   return (
@@ -46,7 +44,6 @@ export default function CartSidebar({ open, onClose }: CartSidebarProps) {
               onClick={onClose}
             />
 
-            {/* Sidebar */}
             <motion.div
               className="fixed top-0 right-0 h-full w-full md:w-96 bg-white shadow-lg z-50 flex flex-col"
               initial={{ x: "100%" }}
@@ -54,7 +51,6 @@ export default function CartSidebar({ open, onClose }: CartSidebarProps) {
               exit={{ x: "100%" }}
               transition={{ type: "tween", duration: 0.3 }}
             >
-              {/* Header */}
               <div className="flex justify-between items-center p-4 border-b">
                 <h2 className="text-lg font-semibold">
                   {step === "cart" ? "My Cart" : "Select delivery address"}
@@ -64,21 +60,17 @@ export default function CartSidebar({ open, onClose }: CartSidebarProps) {
                 </button>
               </div>
 
-              {/* Body */}
               <div className="flex-1 overflow-y-auto p-4">
                 {step === "cart" ? (
                   <CartView
-                    token={token}
+                    isAuthenticated={isAuthenticated}
                     onLoginRequired={() => setLoginOpen(true)}
                     onProceed={goToAddress}
                     selectedAddress={selectedAddress}
-                    onChangeAddress={handleChangeAddress} 
+                    onChangeAddress={handleChangeAddress}
                   />
                 ) : (
-                  <AddressView 
-                  onBack={goToCart} 
-                  onSelectAddress={setSelectedAddress}
-                   />
+                  <AddressView onBack={goToCart} onSelectAddress={setSelectedAddress} />
                 )}
               </div>
             </motion.div>
@@ -86,7 +78,6 @@ export default function CartSidebar({ open, onClose }: CartSidebarProps) {
         )}
       </AnimatePresence>
 
-      {/* Login Dialog */}
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
     </>
   )

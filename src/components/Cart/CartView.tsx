@@ -8,7 +8,7 @@ import type { Address } from "@/lib/data";
 import { useRouter } from "next/navigation";
 
 interface CartViewProps {
-  token: string | null;
+  isAuthenticated: boolean;
   onLoginRequired: () => void;
   onProceed: () => void;
   selectedAddress: Address | null;
@@ -16,39 +16,37 @@ interface CartViewProps {
 }
 
 export default function CartView({
-  token,
+  isAuthenticated,
   onLoginRequired,
   onProceed,
   selectedAddress,
   onChangeAddress,
 }: CartViewProps) {
-  const { 
-    cartItems, 
-    increaseQuantity, 
-    decreaseQuantity, 
-    removeItem, 
-    initCookieId, 
-    fetchCart, 
-    total, 
-    loading ,
+  const {
+    cartItems,
+    increaseQuantity,
+    decreaseQuantity,
+    removeItem,
+    initCookieId,
+    fetchCart,
+    total,
+    loading,
     fetchTotal,
   } = useCart();
 
   const router = useRouter();
 
-  // Initialize cookieId and fetch cart on mount
-
- useEffect(() => {
-  const loadCart = async () => {
-    initCookieId();
-    await fetchCart();
-    await fetchTotal(); // <--- fetch totals immediately
-  };
-  loadCart();
-}, [initCookieId, fetchCart, fetchTotal]);
+  useEffect(() => {
+    const loadCart = async () => {
+      initCookieId();
+      await fetchCart();
+      await fetchTotal();
+    };
+    loadCart();
+  }, [initCookieId, fetchCart, fetchTotal]);
 
   const handleCheckout = () => {
-    if (!token) onLoginRequired();
+    if (!isAuthenticated) onLoginRequired();
     else if (!selectedAddress) onProceed();
     else router.push("/checkout");
   };
@@ -65,31 +63,31 @@ export default function CartView({
                 <img src={item.img} alt={item.title} className="w-12 h-12 object-cover rounded" />
                 <div>
                   <p className="text-sm font-medium">{item.title}</p>
-                  <p className="text-xs text-gray-500">₹{item.price}</p>
+                  <p className="text-xs text-gray-500">â‚¹{item.price}</p>
                 </div>
               </div>
 
               <div className="flex items-center gap-1">
                 <div className="flex items-center gap-2 border border-green-600 rounded-md px-2 py-1">
-                  <button 
-                    className="text-green-600 font-bold" 
-                    onClick={() => decreaseQuantity(item.id)} 
+                  <button
+                    className="text-green-600 font-bold"
+                    onClick={() => decreaseQuantity(item.id)}
                     disabled={loading}
                   >
-                    −
+                    âˆ’
                   </button>
                   <span>{quantity}</span>
-                  <button 
-                    className="text-green-600 font-bold" 
-                    onClick={() => increaseQuantity(item.id)} 
+                  <button
+                    className="text-green-600 font-bold"
+                    onClick={() => increaseQuantity(item.id)}
                     disabled={loading}
                   >
                     +
                   </button>
                 </div>
-                <button 
-                  className="text-red-500 ml-2" 
-                  onClick={() => removeItem(item.id)} 
+                <button
+                  className="text-red-500 ml-2"
+                  onClick={() => removeItem(item.id)}
                   disabled={loading}
                 >
                   <Trash />
@@ -98,34 +96,32 @@ export default function CartView({
             </div>
           ))}
 
-         {/* Billing Details */}
-<div className="border-t pt-4 mt-4 space-y-1 text-sm">
-  <div className="flex justify-between">
-    <span>SubTotal:</span>
-    <span>₹{total?.subTotal ?? 0}</span>
-  </div>
-  <div className="flex justify-between">
-    <span>Discount:</span>
-    <span>₹{total?.discount ?? 0}</span>
-  </div>
-  <div className="flex justify-between">
-    <span>Tax:</span>
-    <span>₹{total?.tax ?? 0}</span>
-  </div>
-  <div className="flex justify-between">
-    <span>Shipping:</span>
-    <span>₹{total?.shipping ?? 0}</span>
-  </div>
-  <div className="flex justify-between font-semibold border-t pt-2">
-    <span>Payable Amount:</span>
-    <span>₹{total?.payableAmt ?? 0}</span>
-  </div>
-</div>
+          <div className="border-t pt-4 mt-4 space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span>SubTotal:</span>
+              <span>â‚¹{total?.subTotal ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Discount:</span>
+              <span>â‚¹{total?.discount ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Tax:</span>
+              <span>â‚¹{total?.tax ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Shipping:</span>
+              <span>â‚¹{total?.shipping ?? 0}</span>
+            </div>
+            <div className="flex justify-between font-semibold border-t pt-2">
+              <span>Payable Amount:</span>
+              <span>â‚¹{total?.payableAmt ?? 0}</span>
+            </div>
+          </div>
 
-          {/* Address */}
           {selectedAddress && (
-            <div 
-              className="border p-3 rounded mb-3 bg-green-50 cursor-pointer mt-2" 
+            <div
+              className="border p-3 rounded mb-3 bg-green-50 cursor-pointer mt-2"
               onClick={onChangeAddress}
             >
               <p className="text-sm font-medium">
@@ -139,12 +135,12 @@ export default function CartView({
             </div>
           )}
 
-          <Button 
-            className="w-full bg-green-600 text-white disabled:opacity-50 mt-2" 
-            onClick={handleCheckout} 
+          <Button
+            className="w-full bg-green-600 text-white disabled:opacity-50 mt-2"
+            onClick={handleCheckout}
             disabled={cartItems.length === 0 || loading}
           >
-            {token ? (selectedAddress ? "Proceed to Payment" : "Proceed") : "Login to Continue"}
+            {isAuthenticated ? (selectedAddress ? "Proceed to Payment" : "Proceed") : "Login to Continue"}
           </Button>
         </>
       )}
